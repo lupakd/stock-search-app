@@ -1,13 +1,9 @@
-import {
-  ConfigError,
-  NotFoundError,
-  RateLimitError,
-  UpstreamError,
-} from "./errors";
-import type { SymbolMatch } from "./types";
-import { asString, isRecord, parseNumber } from "./parse";
+import type { CompanyOverview, Quote, SymbolMatch } from "./types";
+import { ConfigError, RateLimitError, UpstreamError } from "./errors";
 
 const BASE_URL = "https://www.alphavantage.co/query";
+
+// ─── Transport ────────────────────────────────────────────────────────────────
 
 function getApiKey(): string {
   const key = process.env.ALPHAVANTAGE_API_KEY;
@@ -46,6 +42,7 @@ async function fetchAlphavantage(
   let payload: unknown;
   try {
     payload = await response.json();
+
   } catch (cause) {
     throw new UpstreamError("Alphavantage returned invalid JSON", { cause });
   }
@@ -59,11 +56,13 @@ async function fetchAlphavantage(
     throw new RateLimitError(note);
   }
   if (typeof payload["Error Message"] === "string") {
-    throw new NotFoundError(payload["Error Message"]);
+    throw new UpstreamError(payload["Error Message"]);
   }
 
   return payload;
 }
+
+// ─── Search ───────────────────────────────────────────────────────────────────
 
 /** Searches Alphavantage by symbol or company name. Returns [] for a blank query. */
 export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
@@ -83,12 +82,12 @@ export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
   }
 
   return matches
-    .map(parseSymbolMatch)
+    .map(mapSymbolMatch)
     .filter((match): match is SymbolMatch => match !== null);
 }
 
-/** Maps one raw `bestMatches` entry (ugly numbered keys) to a clean SymbolMatch. */
-function parseSymbolMatch(raw: unknown): SymbolMatch | null {
+/** One raw `bestMatches` entry (ugly numbered keys) → SymbolMatch. */
+function mapSymbolMatch(raw: unknown): SymbolMatch | null {
   if (!isRecord(raw)) {
     return null;
   }
@@ -102,6 +101,102 @@ function parseSymbolMatch(raw: unknown): SymbolMatch | null {
     type: asString(raw["3. type"]),
     region: asString(raw["4. region"]),
     currency: asString(raw["8. currency"]),
-    matchScore: parseNumber(raw["9. matchScore"]),
   };
+}
+
+// ─── Quote ────────────────────────────────────────────────────────────────────
+
+/**
+ * Current price + day stats for one symbol. Returns null when Alphavantage has no
+ * quote — an unknown or delisted symbol comes back as an empty `Global Quote`,
+ * not an error. Cached 60s: quotes move, but not within a page view.
+ */
+export async function getQuote(symbol: string): Promise<Quote | null> {
+  const data = await fetchAlphavantage({ function: "GLOBAL_QUOTE", symbol }, 60);
+  return mapQuote(data["Global Quote"]);
+}
+
+/** The `Global Quote` object → Quote. Null for an empty (unknown/delisted) quote. */
+function mapQuote(raw: unknown): Quote | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const symbol = asString(raw["01. symbol"]);
+  const price = parseNumber(raw["05. price"]);
+  if (!symbol || price === null) {
+    return null;
+  }
+  return {
+    symbol,
+    price,
+    open: parseNumber(raw["02. open"]),
+    high: parseNumber(raw["03. high"]),
+    low: parseNumber(raw["04. low"]),
+    volume: parseNumber(raw["06. volume"]),
+    latestTradingDay: asString(raw["07. latest trading day"]) || null,
+    previousClose: parseNumber(raw["08. previous close"]),
+    change: parseNumber(raw["09. change"]),
+    changePercent: parseNumber(raw["10. change percent"]),
+  };
+}
+
+// ─── Overview ─────────────────────────────────────────────────────────────────
+
+/**
+ * Company profile for one symbol. Returns null when there's no profile — OVERVIEW
+ * comes back as an empty object for ETFs, crypto, and unknown symbols. Cached 24h:
+ * a company's sector and description barely change.
+ */
+export async function getOverview(
+  symbol: string,
+): Promise<CompanyOverview | null> {
+  const data = await fetchAlphavantage({ function: "OVERVIEW", symbol }, 86400);
+  return mapOverview(data);
+}
+
+/** The OVERVIEW payload → CompanyOverview. Null when empty (ETF/crypto/unknown). */
+function mapOverview(raw: unknown): CompanyOverview | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+  const name = asString(raw["Name"]);
+  if (!name) {
+    return null;
+  }
+  return {
+    name,
+    description: asString(raw["Description"]) || null,
+    exchange: asString(raw["Exchange"]) || null,
+    sector: asString(raw["Sector"]) || null,
+    industry: asString(raw["Industry"]) || null,
+    marketCap: parseNumber(raw["MarketCapitalization"]),
+    peRatio: parseNumber(raw["PERatio"]),
+    dividendYield: parseNumber(raw["DividendYield"]),
+    week52High: parseNumber(raw["52WeekHigh"]),
+    week52Low: parseNumber(raw["52WeekLow"]),
+  };
+}
+
+// ─── Coercion primitives ────────────────────────────────────────────────────────
+// Alphavantage's JSON is stringly-typed (numbers as strings; "None" / "-" / "" for
+// gaps), so every mapper above leans on these to pull a clean value out of unknown.
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function parseNumber(value: unknown): number | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim().replace(/%$/, "");
+  if (trimmed === "" || trimmed === "None" || trimmed === "-") {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
