@@ -12,11 +12,25 @@ export class AlphavantageError extends Error {
 /** The API key is missing or misconfigured. */
 export class ConfigError extends AlphavantageError {}
 
-/** Network failure, a non-2xx response, or an unparseable body from Alphavantage. */
+/** Network failure, a non-2xx, a bad body, or an `Error Message` from Alphavantage. */
 export class UpstreamError extends AlphavantageError {}
 
 /** Alphavantage's rate limit / daily quota was hit (its `Note` / `Information` field). */
 export class RateLimitError extends AlphavantageError {}
 
-/** The requested symbol has no data (empty payload or an `Error Message`). */
-export class NotFoundError extends AlphavantageError {}
+/**
+ * Turns any thrown error into a short, human message for the UI — the one place
+ * that maps our error taxonomy to copy, so search and detail stay consistent.
+ */
+export function toUserMessage(error: unknown): string {
+  if (error instanceof RateLimitError) {
+    return "Alphavantage's rate limit was hit — try again in a minute.";
+  }
+  if (error instanceof ConfigError) {
+    return "The app is missing its Alphavantage API key.";
+  }
+  if (error instanceof AlphavantageError) {
+    return "Couldn't reach Alphavantage right now — please try again.";
+  }
+  return "Something went wrong — please try again.";
+}
