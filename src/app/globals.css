@@ -7,8 +7,8 @@
   --destructive: 220 38 38;
   --positive: 22 163 74;
 
-  --gradient-1: 59 130 246;
-  --gradient-2: 139 92 246;
+  --gradient-1: 29 78 216;
+  --gradient-2: 74 74 176;
   --gradient-3: 23 157 115;
 
   --radius: 1rem;
@@ -34,7 +34,7 @@
     --positive: 74 222 128;
 
     --gradient-1: 29 78 216;
-    --gradient-2: 91 33 182;
+    --gradient-2: 74 74 176;
     --gradient-3: 23 157 115;
   }
 }
@@ -52,30 +52,40 @@ body {
       rgb(var(--gradient-2)) 50%,
       rgb(var(--gradient-3))
     );
-  min-height: 100vh;
   color: rgb(var(--foreground));
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--foreground) / 0.1) transparent;
+  }
 }
 
 @layer components {
   .glass-panel,
   .glass-card {
-    @apply border backdrop-blur-xl;
+    @apply border;
 
     border-radius: var(--radius);
     background: rgb(var(--background) / 0.45);
-    border-color: rgb(var(--foreground) / 0.08);
+    border-color: rgb(var(--foreground) / 0.12);
     box-shadow:
-      0 8px 32px rgb(0 0 0 / 0.08),
-      inset 0 1px 0 rgb(255 255 255 / 0.18);
+    0 8px 32px rgb(0 0 0 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.18);
   }
-
+  
   .glass-panel {
     @apply p-8;
   }
 
   .glass-card {
-    @apply p-4;
+    @apply p-4 border backdrop-blur-xl;
   }
 
   .glass-input {
@@ -112,5 +122,61 @@ body {
     color: rgb(var(--destructive));
     border-color: rgb(var(--destructive) / 0.35);
     background: rgb(var(--destructive) / 0.1);
+  }
+
+.glass-dropdown {
+  @apply border backdrop-blur-2xl;
+
+  border-radius: var(--radius);
+  background: rgb(var(--background) / 0.2);
+  border-color: rgb(var(--foreground) / 0.1);
+  box-shadow:
+    0 12px 40px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.2);
+  overflow: hidden;
+  transform-origin: top center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-8px) scaleX(0.68) scaleY(0.32);
+  transition:
+    opacity 120ms ease,
+    transform 200ms cubic-bezier(.22, 1.4, .36, 1),
+    border-radius 200ms cubic-bezier(.22, 1.4, .36, 1),
+    visibility 0s linear 80ms;
+}
+
+.glass-dropdown[data-open="true"] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 180ms ease,
+    transform 420ms cubic-bezier(.22, 1.4, .36, 1),
+    border-radius 420ms cubic-bezier(.22, 1.4, .36, 1),
+    visibility 0s;
+}
+
+  .no-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--foreground) / 0.25) transparent;
+  }
+
+  .scroll-fade {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 1.25rem,
+      black calc(100% - 1.25rem),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      black 1.25rem,
+      black calc(100% - 1.25rem),
+      transparent
+    );
   }
 }

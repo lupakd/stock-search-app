@@ -2,6 +2,7 @@ import Link from "next/link";
 import { searchSymbols } from "@/lib/alphavantage/client";
 import { toUserMessage } from "@/lib/alphavantage/errors";
 import type { SymbolMatch } from "@/lib/alphavantage/types";
+import { SearchBox } from "./search-box";
 
 type HomeProps = {
   searchParams: Promise<{ q?: string }>;
@@ -22,30 +23,26 @@ export default async function Home({ searchParams }: HomeProps) {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12">
-      <div className="glass-panel">
-        <header className="flex flex-col gap-2">
+    <main className="mx-auto flex min-h-0 max-h-dvh w-full max-w-2xl flex-col gap-8 px-4 py-12 lg:max-w-4xl">
+      <div className="glass-panel flex min-h-0 flex-1 flex-col">
+        <header className="flex shrink-0 flex-col gap-2">
           <h1 className="text-3xl font-semibold tracking-tight">Stock Search</h1>
           <p className="text-muted-foreground">
             Search for a stock by symbol or company name.
           </p>
         </header>
 
-        <form action="/" className="mt-8 flex flex-col gap-2 sm:flex-row">
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder="e.g. AAPL or Apple"
-            required
-            className="glass-input flex-1"
-          />
+        <form action="/" className="mt-8 flex shrink-0 flex-col gap-2 sm:flex-row">
+          <SearchBox defaultValue={query} />
           <button type="submit" className="glass-button">
             Search
           </button>
         </form>
 
-        <section className="mt-8">
+        <section
+          className={`mt-5 min-h-0 flex-1 py-5 overflow-y-auto${matches.length > 0 ? " scroll-fade" : ""
+            }`}
+        >
           {errorMessage ? (
             <p className="glass-error">{errorMessage}</p>
           ) : !query ? (
@@ -55,7 +52,7 @@ export default async function Home({ searchParams }: HomeProps) {
           ) : matches.length === 0 ? (
             <p className="text-muted-foreground">No matches for “{query}”.</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {matches.map((match) => (
                 <li key={match.symbol}>
                   <Link
