@@ -34,3 +34,9 @@ export interface CompanyOverview {
   week52High: number | null;
   week52Low: number | null;
 }
+
+/** One daily close for the price-history chart. */
+export interface PricePoint {
+  date: string;
+  close: number;
+}

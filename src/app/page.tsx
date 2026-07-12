@@ -57,6 +57,7 @@ export default async function Home({ searchParams }: HomeProps) {
                 <li key={match.symbol}>
                   <Link
                     href={`/detail/${encodeURIComponent(match.symbol)}`}
+                    prefetch={false}
                     className="glass-card flex flex-col gap-1 transition hover:border-foreground/25"
                   >
                     <span className="font-semibold">{match.symbol}</span>

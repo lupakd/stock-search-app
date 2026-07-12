@@ -1,11 +1,11 @@
 @import "tailwindcss";
 
 :root {
-  --background: 255 255 255;
-  --foreground: 23 23 23;
-  --muted-foreground: 82 82 91;
-  --destructive: 220 38 38;
-  --positive: 22 163 74;
+  --background: 10 10 10;
+  --foreground: 237 237 237;
+  --muted-foreground: 161 161 170;
+  --destructive: 248 113 113;
+  --positive: 74 222 128;
 
   --gradient-1: 29 78 216;
   --gradient-2: 74 74 176;
@@ -23,20 +23,6 @@
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: 10 10 10;
-    --foreground: 237 237 237;
-    --muted-foreground: 161 161 170;
-    --destructive: 248 113 113;
-    --positive: 74 222 128;
-
-    --gradient-1: 29 78 216;
-    --gradient-2: 74 74 176;
-    --gradient-3: 23 157 115;
-  }
 }
 
 body {
@@ -128,7 +114,7 @@ body {
   @apply border backdrop-blur-2xl;
 
   border-radius: var(--radius);
-  background: rgb(var(--background) / 0.2);
+  background: rgb(var(--background) / 0.45);
   border-color: rgb(var(--foreground) / 0.1);
   box-shadow:
     0 12px 40px rgb(0 0 0 / 0.18),
