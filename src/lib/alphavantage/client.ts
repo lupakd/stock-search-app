@@ -1,4 +1,4 @@
-import type { CompanyOverview, Quote, SymbolMatch } from "./types";
+import type { CompanyOverview, PricePoint, Quote, SymbolMatch } from "./types";
 import { ConfigError, RateLimitError, UpstreamError } from "./errors";
 
 const BASE_URL = "https://www.alphavantage.co/query";
@@ -29,6 +29,7 @@ async function fetchAlphavantage(
   }).toString();
 
   let response: Response;
+
   try {
     response = await fetch(url, { next: { revalidate } });
   } catch (cause) {
@@ -175,6 +176,43 @@ function mapOverview(raw: unknown): CompanyOverview | null {
     week52High: parseNumber(raw["52WeekHigh"]),
     week52Low: parseNumber(raw["52WeekLow"]),
   };
+}
+
+// ─── Daily history ──────────────────────────────────────────────────────────────
+
+/**
+ * Daily closes for one symbol (last ~90 sessions, oldest → newest). Returns null when
+ * there's no series. Cached 1h — daily bars only really move at the close.
+ */
+export async function getDailyHistory(
+  symbol: string,
+): Promise<PricePoint[] | null> {
+  const data = await fetchAlphavantage(
+    { function: "TIME_SERIES_DAILY", symbol },
+    3600,
+  );
+
+  return mapDailyHistory(data);
+}
+
+/** The `Time Series (Daily)` object → chronological PricePoint[]. Null when empty. */
+function mapDailyHistory(raw: unknown): PricePoint[] | null {
+  const series = isRecord(raw) ? raw["Time Series (Daily)"] : undefined;
+  if (!isRecord(series)) {
+    return null;
+  }
+  const points: PricePoint[] = [];
+  for (const [date, bar] of Object.entries(series)) {
+    const close = isRecord(bar) ? parseNumber(bar["4. close"]) : null;
+    if (close !== null) {
+      points.push({ date, close });
+    }
+  }
+  if (points.length === 0) {
+    return null;
+  }
+  points.sort((a, b) => a.date.localeCompare(b.date)); // ISO dates sort chronologically
+  return points.slice(-90);
 }
 
 // ─── Coercion primitives ────────────────────────────────────────────────────────

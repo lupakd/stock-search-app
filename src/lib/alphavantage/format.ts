@@ -63,3 +63,15 @@ const decimal = new Intl.NumberFormat("en-US");
 export function formatNumber(value: number | null): string {
   return value === null ? DASH : decimal.format(value);
 }
+
+const monthDay = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
+/** An ISO date (`"2024-01-15"`) → `"Jan 15"` for chart axes / tooltips. */
+export function formatDate(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : monthDay.format(date);
+}

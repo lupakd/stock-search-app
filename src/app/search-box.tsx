@@ -104,6 +104,7 @@ function SuggestionRow({
     <li>
       <Link
         href={`/detail/${encodeURIComponent(match.symbol)}`}
+        prefetch={false}
         onClick={onSelect}
         className="flex items-baseline justify-between gap-3 px-4 py-2 transition hover:bg-foreground/5"
       >
