@@ -1,9 +1,38 @@
+import { unstable_cache } from "next/cache";
 import type { CompanyOverview, PricePoint, Quote, SymbolMatch } from "./types";
 import { ConfigError, RateLimitError, UpstreamError } from "./errors";
 
 const BASE_URL = "https://www.alphavantage.co/query";
 
 // ─── Transport ────────────────────────────────────────────────────────────────
+
+// The free tier allows ~1 request/second. `schedule` runs network requests through a
+// serial queue, spacing each one ≥ REQUEST_SPACING_MS after the previous *started*, so a
+// cold render's back-to-back calls don't trip that limit. Only cache *misses* reach here
+// (every getX below is wrapped in unstable_cache), so warm loads pay nothing. Module-level
+// state is per server instance — enough to space the calls within a single render.
+const REQUEST_SPACING_MS = 1100;
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+let requestQueue: Promise<unknown> = Promise.resolve();
+let lastRequestAt = 0;
+
+function schedule<T>(task: () => Promise<T>): Promise<T> {
+  const result = requestQueue.then(async () => {
+    const wait = lastRequestAt + REQUEST_SPACING_MS - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastRequestAt = Date.now();
+    return task();
+  });
+  // Keep the chain alive whatever this task does, so one failure can't stall the queue.
+  requestQueue = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 function getApiKey(): string {
   const key = process.env.ALPHAVANTAGE_API_KEY;
@@ -17,10 +46,14 @@ function getApiKey(): string {
  * Calls Alphavantage and returns the parsed JSON object. Alphavantage signals
  * trouble *inside* a 200 response two ways — a rate-limit note and an error
  * message — so we detect both here and turn them into typed errors.
+ *
+ * No HTTP-layer cache (`no-store`): Next's fetch cache is payload-blind and would
+ * cache a rate-limit 200, poisoning the endpoint for the whole TTL. Caching lives at
+ * the result layer instead (the unstable_cache wrappers below), which never stores a
+ * thrown error. The request goes through `schedule` to respect the ~1 req/sec limit.
  */
 async function fetchAlphavantage(
   params: Record<string, string>,
-  revalidate: number,
 ): Promise<Record<string, unknown>> {
   const url = new URL(BASE_URL);
   url.search = new URLSearchParams({
@@ -31,7 +64,7 @@ async function fetchAlphavantage(
   let response: Response;
 
   try {
-    response = await fetch(url, { next: { revalidate } });
+    response = await schedule(() => fetch(url, { cache: "no-store" }));
   } catch (cause) {
     throw new UpstreamError("Failed to reach Alphavantage", { cause });
   }
@@ -65,27 +98,32 @@ async function fetchAlphavantage(
 
 // ─── Search ───────────────────────────────────────────────────────────────────
 
-/** Searches Alphavantage by symbol or company name. Returns [] for a blank query. */
-export async function searchSymbols(query: string): Promise<SymbolMatch[]> {
-  const keywords = query.trim();
-  if (!keywords) {
-    return [];
-  }
+/**
+ * Searches Alphavantage by symbol or company name. Returns [] for a blank query.
+ * Cached 1h at the result layer, keyed by query — repeat searches don't re-spend the
+ * quota, and a rate-limit throws through uncached instead of poisoning the term.
+ */
+export const searchSymbols = unstable_cache(
+  async (query: string): Promise<SymbolMatch[]> => {
+    const keywords = query.trim();
+    if (!keywords) {
+      return [];
+    }
 
-  const data = await fetchAlphavantage(
-    { function: "SYMBOL_SEARCH", keywords },
-    3600,
-  );
+    const data = await fetchAlphavantage({ function: "SYMBOL_SEARCH", keywords });
 
-  const matches = data["bestMatches"];
-  if (!Array.isArray(matches)) {
-    return [];
-  }
+    const matches = data["bestMatches"];
+    if (!Array.isArray(matches)) {
+      return [];
+    }
 
-  return matches
-    .map(mapSymbolMatch)
-    .filter((match): match is SymbolMatch => match !== null);
-}
+    return matches
+      .map(mapSymbolMatch)
+      .filter((match): match is SymbolMatch => match !== null);
+  },
+  ["alphavantage", "search"],
+  { revalidate: 3600 },
+);
 
 /** One raw `bestMatches` entry (ugly numbered keys) → SymbolMatch. */
 function mapSymbolMatch(raw: unknown): SymbolMatch | null {
@@ -112,10 +150,14 @@ function mapSymbolMatch(raw: unknown): SymbolMatch | null {
  * quote — an unknown or delisted symbol comes back as an empty `Global Quote`,
  * not an error. Cached 60s: quotes move, but not within a page view.
  */
-export async function getQuote(symbol: string): Promise<Quote | null> {
-  const data = await fetchAlphavantage({ function: "GLOBAL_QUOTE", symbol }, 60);
-  return mapQuote(data["Global Quote"]);
-}
+export const getQuote = unstable_cache(
+  async (symbol: string): Promise<Quote | null> => {
+    const data = await fetchAlphavantage({ function: "GLOBAL_QUOTE", symbol });
+    return mapQuote(data["Global Quote"]);
+  },
+  ["alphavantage", "quote"],
+  { revalidate: 60 },
+);
 
 /** The `Global Quote` object → Quote. Null for an empty (unknown/delisted) quote. */
 function mapQuote(raw: unknown): Quote | null {
@@ -148,12 +190,14 @@ function mapQuote(raw: unknown): Quote | null {
  * comes back as an empty object for ETFs, crypto, and unknown symbols. Cached 24h:
  * a company's sector and description barely change.
  */
-export async function getOverview(
-  symbol: string,
-): Promise<CompanyOverview | null> {
-  const data = await fetchAlphavantage({ function: "OVERVIEW", symbol }, 86400);
-  return mapOverview(data);
-}
+export const getOverview = unstable_cache(
+  async (symbol: string): Promise<CompanyOverview | null> => {
+    const data = await fetchAlphavantage({ function: "OVERVIEW", symbol });
+    return mapOverview(data);
+  },
+  ["alphavantage", "overview"],
+  { revalidate: 86400 },
+);
 
 /** The OVERVIEW payload → CompanyOverview. Null when empty (ETF/crypto/unknown). */
 function mapOverview(raw: unknown): CompanyOverview | null {
@@ -184,16 +228,14 @@ function mapOverview(raw: unknown): CompanyOverview | null {
  * Daily closes for one symbol (last ~90 sessions, oldest → newest). Returns null when
  * there's no series. Cached 1h — daily bars only really move at the close.
  */
-export async function getDailyHistory(
-  symbol: string,
-): Promise<PricePoint[] | null> {
-  const data = await fetchAlphavantage(
-    { function: "TIME_SERIES_DAILY", symbol },
-    3600,
-  );
-
-  return mapDailyHistory(data);
-}
+export const getDailyHistory = unstable_cache(
+  async (symbol: string): Promise<PricePoint[] | null> => {
+    const data = await fetchAlphavantage({ function: "TIME_SERIES_DAILY", symbol });
+    return mapDailyHistory(data);
+  },
+  ["alphavantage", "history"],
+  { revalidate: 3600 },
+);
 
 /** The `Time Series (Daily)` object → chronological PricePoint[]. Null when empty. */
 function mapDailyHistory(raw: unknown): PricePoint[] | null {
