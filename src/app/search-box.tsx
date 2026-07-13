@@ -77,7 +77,7 @@ export function SearchBox({ defaultValue = "" }: { defaultValue?: string }) {
         ) : !data || data.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted-foreground">No matches.</p>
         ) : (
-          <ul className="no-scrollbar max-h-80 overflow-y-auto py-1">
+          <ul className="no-scrollbar max-h-[min(20rem,calc(100dvh-16rem))] overflow-y-auto py-1">
             {data.map((match) => (
               <SuggestionRow
                 key={match.symbol}

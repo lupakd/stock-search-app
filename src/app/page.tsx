@@ -3,6 +3,7 @@ import { searchSymbols } from "@/lib/alphavantage/client";
 import { toUserMessage } from "@/lib/alphavantage/errors";
 import type { SymbolMatch } from "@/lib/alphavantage/types";
 import { SearchBox } from "./search-box";
+import { StarIcon } from "./star-icon";
 
 type HomeProps = {
   searchParams: Promise<{ q?: string }>;
@@ -26,7 +27,17 @@ export default async function Home({ searchParams }: HomeProps) {
     <main className="mx-auto flex min-h-0 max-h-dvh w-full max-w-2xl flex-col gap-8 px-4 py-12 lg:max-w-4xl">
       <div className="glass-panel flex min-h-0 flex-1 flex-col">
         <header className="flex shrink-0 flex-col gap-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Stock Search</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-3xl font-semibold tracking-tight">Stock Search</h1>
+            <Link
+              href="/favourites"
+              aria-label="Favourites"
+              title="Favourites"
+              className="rounded-lg p-2 text-muted-foreground transition hover:bg-foreground/5 hover:text-foreground"
+            >
+              <StarIcon />
+            </Link>
+          </div>
           <p className="text-muted-foreground">
             Search for a stock by symbol or company name.
           </p>

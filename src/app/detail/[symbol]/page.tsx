@@ -16,6 +16,7 @@ import {
 } from "@/lib/alphavantage/format";
 import type { CompanyOverview, Quote } from "@/lib/alphavantage/types";
 import { mockDailyHistory } from "@/lib/alphavantage/mock";
+import { FavouriteButton } from "@/app/favourite-button";
 import { DetailShell } from "./detail-shell";
 import { PriceChart } from "./price-chart";
 
@@ -66,9 +67,15 @@ export default async function Detail({ params }: DetailProps) {
       <div className="flex flex-col gap-6">
         <div className="glass-panel flex flex-col gap-6 lg:flex-1">
           <header className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {overview?.name ?? quote.symbol}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {overview?.name ?? quote.symbol}
+              </h1>
+              <FavouriteButton
+                symbol={quote.symbol}
+                name={overview?.name ?? quote.symbol}
+              />
+            </div>
             <p className="text-sm text-muted-foreground">
               {[quote.symbol, overview?.exchange, overview?.sector]
                 .filter(Boolean)

@@ -38,12 +38,18 @@ body {
       rgb(var(--gradient-2)) 50%,
       rgb(var(--gradient-3))
     );
+  /* Pin the gradient to the viewport so it covers scrolled content instead of
+     ending at the first screen's height when the page is taller than the viewport. */
+  background-attachment: fixed;
   color: rgb(var(--foreground));
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
 @layer base {
   html {
+    /* Base layer behind <body>'s gradient — without it the browser default (white)
+       shows through the transparent scrollbar track as a light strip on the edge. */
+    background-color: rgb(var(--background));
     scroll-behavior: smooth;
   }
 
@@ -143,6 +149,14 @@ body {
     border-radius 420ms cubic-bezier(.22, 1.4, .36, 1),
     visibility 0s;
 }
+
+  /* Keep the suggestion list inside the viewport. A fixed height runs off the
+     bottom of the screen in landscape; the input sits a roughly constant
+     distance from the top, so 100dvh minus that offset is the real space left
+     below it. 20rem stays the comfortable cap on tall (portrait) screens. */
+  .glass-dropdown ul {
+    max-height: min(20rem, calc(100dvh - 16rem));
+  }
 
   .no-scrollbar {
     scrollbar-width: thin;
